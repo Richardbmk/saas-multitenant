@@ -9,6 +9,22 @@ Parameters:
     Type: String
     Default: false
     Description: 'Tells if this workshop is running as a part of AWS Event through AWS EventEngine or not'
+  AdminEmailParameter:
+    Type: String
+    Default: 'test@test.com'
+    Description: 'Enter system admin email address'
+  SystemAdminRoleNameParameter:
+    Type: String
+    Default: 'SystemAdmin'
+    Description: 'Enter the role name for system admin'
+  AdminUserPoolCallbackURLParameter:
+    Type: String
+    Default: 'http://example.com'
+    Description: 'Enter Admin Management userpool call back url'
+  TenantUserPoolCallbackURLParameter:
+    Type: String
+    Default: 'http://example.com'
+    Description: 'Enter Tenant Management userpool call back url'
 
 Conditions:
   # Delete this condition after testing
@@ -19,12 +35,34 @@ Resources:
     Type: AWS::Serverless::Application
     Properties:
       Location: nested_templates/tables.yaml
+
   UserInterface:
     Type: AWS::Serverless::Application
     Properties:
       Location: nested_templates/userinterface.yaml
       Parameters:
         IsCloudFrontAndS3PreProvisioned: !Ref EventEngineParameter
+
+  Cognito:
+    Type: AWS::Serverless::Application
+    DependsOn: UserInterface
+    Properties:
+      Location: nested_templates/cognito.yaml
+      Parameters:
+        AdminEmailParameter: !Ref AdminEmailParameter
+        SystemAdminRoleNameParameter: !Ref SystemAdminRoleNameParameter
+        AdminUserPoolCallbackURLParameter:
+          !If [
+            IsNotRunningInEventEngine,
+            !GetAtt UserInterface.Outputs.AdminAppSite,
+            !Ref AdminUserPoolCallbackURLParameter,
+          ]
+        TenantUserPoolCallbackURLParameter:
+          !If [
+            IsNotRunningInEventEngine,
+            !GetAtt UserInterface.Outputs.ApplicationSite,
+            !Ref TenantUserPoolCallbackURLParameter,
+          ]
 
 Outputs:
   AdminSiteBucket:
@@ -63,3 +101,26 @@ Outputs:
   TenantUserMappingTableName:
     Description: The Name of DynamoDB Table of TenantUserMappingTableName
     Value: !GetAtt DynamoDBTables.Outputs.TenantUserMappingTableName
+  CognitoOperationUsersUserPoolId:
+    Description: The user pool id of Admin Management userpool
+    Value: !GetAtt Cognito.Outputs.CognitoOperationUsersUserPoolId
+    Export:
+      Name: 'Serverless-SaaS-CognitoOperationUsersUserPoolId'
+  CognitoOperationUsersUserPoolProviderURL:
+    Description: The Admin Management userpool provider url
+    Value: !GetAtt Cognito.Outputs.CognitoOperationUsersUserPoolProviderURL
+  CognitoOperationUsersUserPoolClientId:
+    Description: The Admin Management userpool client id
+    Value: !GetAtt Cognito.Outputs.CognitoOperationUsersUserPoolClientId
+    Export:
+      Name: 'Serverless-SaaS-CognitoOperationUsersUserPoolClientId'
+  CognitoTenantUserPoolId:
+    Description: The user pool id for tenant user pool
+    Value: !GetAtt Cognito.Outputs.CognitoUserPoolId
+    Export:
+      Name: 'Serverless-SaaS-CognitoTenantUserPoolId'
+  CognitoTenantAppClientId:
+    Description: The app client id for tenant user pool
+    Value: !GetAtt Cognito.Outputs.CognitoUserPoolClientId
+    Export:
+      Name: 'Serverless-SaaS-CognitoTenantAppClientId'
