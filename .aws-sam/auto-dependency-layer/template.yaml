@@ -1,0 +1,275 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Template to Bootstrap the Common Resources
+
+  '
+Parameters:
+  EventEngineParameter:
+    Type: String
+    Default: false
+    Description: Tells if this workshop is running as a part of AWS Event through
+      AWS EventEngine or not
+  AdminEmailParameter:
+    Type: String
+    Default: test@test.com
+    Description: Enter system admin email address
+  SystemAdminRoleNameParameter:
+    Type: String
+    Default: SystemAdmin
+    Description: Enter the role name for system admin
+  AdminUserPoolCallbackURLParameter:
+    Type: String
+    Default: http://example.com
+    Description: Enter Admin Management userpool call back url
+  TenantUserPoolCallbackURLParameter:
+    Type: String
+    Default: http://example.com
+    Description: Enter Tenant Management userpool call back url
+  ApiKeyOperationUsersParameter:
+    Type: String
+    Default: 9a7743fa-3ae7-11eb-adc1-0242ac120002
+    Description: Enter default api key value to be used by api gateway for system
+      admins
+  ApiKeyPlatinumTierParameter:
+    Type: String
+    Default: 88b43c36-802e-11eb-af35-38f9d35b2c15
+    Description: Enter default api key value to be used by api gateway for platinum
+      tier tenants
+  ApiKeyPremiumTierParameter:
+    Type: String
+    Default: 6db2bdc2-6d96-11eb-a56f-38f9d33cfd0f
+    Description: Enter default api key value to be used by api gateway for premium
+      tier tenants
+  ApiKeyStandardTierParameter:
+    Type: String
+    Default: b1c735d8-6d96-11eb-a28b-38f9d33cfd0f
+    Description: Enter default api key value to be used by api gateway for standard
+      tier tenants
+  ApiKeyBasicTierParameter:
+    Type: String
+    Default: daae9784-6d96-11eb-a28b-38f9d33cfd0f
+    Description: Enter default api key value to be used by api gateway for basic tier
+      tenants
+Conditions:
+  IsNotRunningInEventEngine:
+    Fn::Not:
+    - Fn::Equals:
+      - Ref: EventEngineParameter
+      - true
+Resources:
+  DynamoDBTables:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: DynamoDBTables\template.yaml
+    Metadata:
+      SamResourceId: DynamoDBTables
+  UserInterface:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: UserInterface\template.yaml
+      Parameters:
+        IsCloudFrontAndS3PreProvisioned:
+          Ref: EventEngineParameter
+    Metadata:
+      SamResourceId: UserInterface
+  Cognito:
+    Type: AWS::Serverless::Application
+    DependsOn: UserInterface
+    Properties:
+      Location: Cognito\template.yaml
+      Parameters:
+        AdminEmailParameter:
+          Ref: AdminEmailParameter
+        SystemAdminRoleNameParameter:
+          Ref: SystemAdminRoleNameParameter
+        AdminUserPoolCallbackURLParameter:
+          Fn::If:
+          - IsNotRunningInEventEngine
+          - Fn::GetAtt:
+            - UserInterface
+            - Outputs.AdminAppSite
+          - Ref: AdminUserPoolCallbackURLParameter
+        TenantUserPoolCallbackURLParameter:
+          Fn::If:
+          - IsNotRunningInEventEngine
+          - Fn::GetAtt:
+            - UserInterface
+            - Outputs.ApplicationSite
+          - Ref: TenantUserPoolCallbackURLParameter
+    Metadata:
+      SamResourceId: Cognito
+  LambdaFunctions:
+    Type: AWS::Serverless::Application
+    DependsOn: UserInterface
+    Properties:
+      Location: LambdaFunctions\template.yaml
+      Parameters:
+        CognitoUserPoolId:
+          Fn::GetAtt:
+          - Cognito
+          - Outputs.CognitoUserPoolId
+        CognitoUserPoolClientId:
+          Fn::GetAtt:
+          - Cognito
+          - Outputs.CognitoUserPoolClientId
+        CognitoOperationUsersUserPoolId:
+          Fn::GetAtt:
+          - Cognito
+          - Outputs.CognitoOperationUsersUserPoolId
+        CognitoOperationUsersUserPoolClientId:
+          Fn::GetAtt:
+          - Cognito
+          - Outputs.CognitoOperationUsersUserPoolClientId
+        TenantDetailsTableArn:
+          Fn::GetAtt:
+          - DynamoDBTables
+          - Outputs.TenantDetailsTableArn
+        ServerlessSaaSSettingsTableArn:
+          Fn::GetAtt:
+          - DynamoDBTables
+          - Outputs.ServerlessSaaSSettingsTableArn
+        ApiKeyOperationUsersParameter:
+          Ref: ApiKeyOperationUsersParameter
+        ApiKeyPlatinumTierParameter:
+          Ref: ApiKeyPlatinumTierParameter
+        ApiKeyPremiumTierParameter:
+          Ref: ApiKeyPremiumTierParameter
+        ApiKeyStandardTierParameter:
+          Ref: ApiKeyStandardTierParameter
+        ApiKeyBasicTierParameter:
+          Ref: ApiKeyBasicTierParameter
+        TenantStackMappingTableArn:
+          Fn::GetAtt:
+          - DynamoDBTables
+          - Outputs.TenantStackMappingTableArn
+        TenantUserMappingTableArn:
+          Fn::GetAtt:
+          - DynamoDBTables
+          - Outputs.TenantUserMappingTableArn
+        TenantStackMappingTableName:
+          Fn::GetAtt:
+          - DynamoDBTables
+          - Outputs.TenantStackMappingTableName
+        TenantUserPoolCallbackURLParameter:
+          Fn::If:
+          - IsNotRunningInEventEngine
+          - Fn::GetAtt:
+            - UserInterface
+            - Outputs.ApplicationSite
+          - Ref: TenantUserPoolCallbackURLParameter
+    Metadata:
+      SamResourceId: LambdaFunctions
+Outputs:
+  AdminSiteBucket:
+    Description: The S3 Bucket that will contain the static assets for the tenant
+      administration application
+    Value:
+      Fn::GetAtt:
+      - UserInterface
+      - Outputs.AdminBucket
+    Condition: IsNotRunningInEventEngine
+  AdminAppSite:
+    Description: The name of the CloudFront url for Admin Management site
+    Value:
+      Fn::GetAtt:
+      - UserInterface
+      - Outputs.AdminAppSite
+    Condition: IsNotRunningInEventEngine
+  LandingApplicationSiteBucket:
+    Description: The S3 Bucket that will contain the static assets for the landing
+      application
+    Value:
+      Fn::GetAtt:
+      - UserInterface
+      - Outputs.LandingAppBucket
+    Condition: IsNotRunningInEventEngine
+  LandingApplicationSite:
+    Description: The name of the CloudFront url for Landing site
+    Value:
+      Fn::GetAtt:
+      - UserInterface
+      - Outputs.LandingApplicationSite
+    Condition: IsNotRunningInEventEngine
+  ApplicationSiteBucket:
+    Description: The S3 Bucket that will contain the static assets for the tenant
+      application
+    Value:
+      Fn::GetAtt:
+      - UserInterface
+      - Outputs.AppBucket
+    Condition: IsNotRunningInEventEngine
+  ApplicationSite:
+    Description: The name of the CloudFront url for Tenant Management site
+    Value:
+      Fn::GetAtt:
+      - UserInterface
+      - Outputs.ApplicationSite
+    Condition: IsNotRunningInEventEngine
+  ServerlessSaaSSettingsTableName:
+    Description: The Name of DynamoDB Table of ServerlessSaaSSettingsTableName
+    Value:
+      Fn::GetAtt:
+      - DynamoDBTables
+      - Outputs.ServerlessSaaSSettingsTableName
+  TenantStackMappingTableName:
+    Description: The Name of DynamoDB Table of TenantStackMappingTableName
+    Value:
+      Fn::GetAtt:
+      - DynamoDBTables
+      - Outputs.TenantStackMappingTableName
+  TenantDetailsTableName:
+    Description: The Name of DynamoDB Table of TenantDetailsTableName
+    Value:
+      Fn::GetAtt:
+      - DynamoDBTables
+      - Outputs.TenantDetailsTableName
+  TenantUserMappingTableName:
+    Description: The Name of DynamoDB Table of TenantUserMappingTableName
+    Value:
+      Fn::GetAtt:
+      - DynamoDBTables
+      - Outputs.TenantUserMappingTableName
+  CognitoOperationUsersUserPoolId:
+    Description: The user pool id of Admin Management userpool
+    Value:
+      Fn::GetAtt:
+      - Cognito
+      - Outputs.CognitoOperationUsersUserPoolId
+    Export:
+      Name: Serverless-SaaS-CognitoOperationUsersUserPoolId
+  CognitoOperationUsersUserPoolProviderURL:
+    Description: The Admin Management userpool provider url
+    Value:
+      Fn::GetAtt:
+      - Cognito
+      - Outputs.CognitoOperationUsersUserPoolProviderURL
+  CognitoOperationUsersUserPoolClientId:
+    Description: The Admin Management userpool client id
+    Value:
+      Fn::GetAtt:
+      - Cognito
+      - Outputs.CognitoOperationUsersUserPoolClientId
+    Export:
+      Name: Serverless-SaaS-CognitoOperationUsersUserPoolClientId
+  CognitoTenantUserPoolId:
+    Description: The user pool id for tenant user pool
+    Value:
+      Fn::GetAtt:
+      - Cognito
+      - Outputs.CognitoUserPoolId
+    Export:
+      Name: Serverless-SaaS-CognitoTenantUserPoolId
+  CognitoTenantAppClientId:
+    Description: The app client id for tenant user pool
+    Value:
+      Fn::GetAtt:
+      - Cognito
+      - Outputs.CognitoUserPoolClientId
+    Export:
+      Name: Serverless-SaaS-CognitoTenantAppClientId
+  ApiKeyOperationUsers:
+    Description: The api key of system admins
+    Value:
+      Ref: ApiKeyOperationUsersParameter
+    Export:
+      Name: Serverless-SaaS-ApiKeyOperationUsers

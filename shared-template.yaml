@@ -25,6 +25,26 @@ Parameters:
     Type: String
     Default: 'http://example.com'
     Description: 'Enter Tenant Management userpool call back url'
+  ApiKeyOperationUsersParameter:
+    Type: String
+    Default: '9a7743fa-3ae7-11eb-adc1-0242ac120002'
+    Description: 'Enter default api key value to be used by api gateway for system admins'
+  ApiKeyPlatinumTierParameter:
+    Type: String
+    Default: '88b43c36-802e-11eb-af35-38f9d35b2c15'
+    Description: 'Enter default api key value to be used by api gateway for platinum tier tenants'
+  ApiKeyPremiumTierParameter:
+    Type: String
+    Default: '6db2bdc2-6d96-11eb-a56f-38f9d33cfd0f'
+    Description: 'Enter default api key value to be used by api gateway for premium tier tenants'
+  ApiKeyStandardTierParameter:
+    Type: String
+    Default: 'b1c735d8-6d96-11eb-a28b-38f9d33cfd0f'
+    Description: 'Enter default api key value to be used by api gateway for standard tier tenants'
+  ApiKeyBasicTierParameter:
+    Type: String
+    Default: 'daae9784-6d96-11eb-a28b-38f9d33cfd0f'
+    Description: 'Enter default api key value to be used by api gateway for basic tier tenants'
 
 Conditions:
   # Delete this condition after testing
@@ -57,6 +77,33 @@ Resources:
             !GetAtt UserInterface.Outputs.AdminAppSite,
             !Ref AdminUserPoolCallbackURLParameter,
           ]
+        TenantUserPoolCallbackURLParameter:
+          !If [
+            IsNotRunningInEventEngine,
+            !GetAtt UserInterface.Outputs.ApplicationSite,
+            !Ref TenantUserPoolCallbackURLParameter,
+          ]
+
+  LambdaFunctions:
+    Type: AWS::Serverless::Application
+    DependsOn: UserInterface
+    Properties:
+      Location: nested_templates/lambdafunctions.yaml
+      Parameters:
+        CognitoUserPoolId: !GetAtt Cognito.Outputs.CognitoUserPoolId
+        CognitoUserPoolClientId: !GetAtt Cognito.Outputs.CognitoUserPoolClientId
+        CognitoOperationUsersUserPoolId: !GetAtt Cognito.Outputs.CognitoOperationUsersUserPoolId
+        CognitoOperationUsersUserPoolClientId: !GetAtt Cognito.Outputs.CognitoOperationUsersUserPoolClientId
+        TenantDetailsTableArn: !GetAtt DynamoDBTables.Outputs.TenantDetailsTableArn
+        ServerlessSaaSSettingsTableArn: !GetAtt DynamoDBTables.Outputs.ServerlessSaaSSettingsTableArn
+        ApiKeyOperationUsersParameter: !Ref ApiKeyOperationUsersParameter
+        ApiKeyPlatinumTierParameter: !Ref ApiKeyPlatinumTierParameter
+        ApiKeyPremiumTierParameter: !Ref ApiKeyPremiumTierParameter
+        ApiKeyStandardTierParameter: !Ref ApiKeyStandardTierParameter
+        ApiKeyBasicTierParameter: !Ref ApiKeyBasicTierParameter
+        TenantStackMappingTableArn: !GetAtt DynamoDBTables.Outputs.TenantStackMappingTableArn
+        TenantUserMappingTableArn: !GetAtt DynamoDBTables.Outputs.TenantUserMappingTableArn
+        TenantStackMappingTableName: !GetAtt DynamoDBTables.Outputs.TenantStackMappingTableName
         TenantUserPoolCallbackURLParameter:
           !If [
             IsNotRunningInEventEngine,
@@ -124,3 +171,8 @@ Outputs:
     Value: !GetAtt Cognito.Outputs.CognitoUserPoolClientId
     Export:
       Name: 'Serverless-SaaS-CognitoTenantAppClientId'
+  ApiKeyOperationUsers:
+    Description: The api key of system admins
+    Value: !Ref ApiKeyOperationUsersParameter
+    Export:
+      Name: 'Serverless-SaaS-ApiKeyOperationUsers'

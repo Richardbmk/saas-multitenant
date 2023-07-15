@@ -2,4 +2,11 @@
 
 [function_build_definitions]
 
-[layer_build_definitions]
+[layer_build_definitions.4b8ddc0c-3a87-4cd0-896d-fcb63f657f51]
+layer_name = "LambdaFunctions/ServerlessSaaSLayers"
+codeuri = "C:\\Users\\rboriba\\OneDrive\\Escritorio\\saas-multitenant-app\\layers"
+build_method = "python3.9"
+compatible_runtimes = ["python3.9"]
+architecture = "x86_64"
+manifest_hash = "4cdfcb77fabe5d0ef36ce6f5763b55ac"
+layer = "LambdaFunctions/ServerlessSaaSLayers"

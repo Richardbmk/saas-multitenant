@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Template to deploy lambda functions as part of bootstrap
+
+  '
+Parameters:
+  CognitoOperationUsersUserPoolId:
+    Type: String
+  CognitoOperationUsersUserPoolClientId:
+    Type: String
+  CognitoUserPoolId:
+    Type: String
+  CognitoUserPoolClientId:
+    Type: String
+  TenantDetailsTableArn:
+    Type: String
+  ServerlessSaaSSettingsTableArn:
+    Type: String
+  ApiKeyOperationUsersParameter:
+    Type: String
+  ApiKeyPlatinumTierParameter:
+    Type: String
+  ApiKeyPremiumTierParameter:
+    Type: String
+  ApiKeyStandardTierParameter:
+    Type: String
+  ApiKeyBasicTierParameter:
+    Type: String
+  TenantStackMappingTableArn:
+    Type: String
+  TenantUserMappingTableArn:
+    Type: String
+  TenantStackMappingTableName:
+    Type: String
+  TenantUserPoolCallbackURLParameter:
+    Type: String
+    Description: Enter Tenant Management userpool call back url
+Globals:
+  Function:
+    Timeout: 29
+    Layers:
+    - Fn::Sub: arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:14
+    Environment:
+      Variables:
+        LOG_LEVEL: DEBUG
+        POWERTOOLS_METRICS_NAMESPACE: ServerlessSaaS
+Resources:
+  ServerlessSaaSLayers:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: serverless-saas-dependencies
+      Description: Utilities for project
+      ContentUri: ServerlessSaaSLayers
+      CompatibleRuntimes:
+      - python3.9
+      LicenseInfo: MIT
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: python3.9
+      SamResourceId: ServerlessSaaSLayers

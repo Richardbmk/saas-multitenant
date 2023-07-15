@@ -1,0 +1,296 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Template to deploy cloudfront and s3 bucket for UI code
+
+  '
+Parameters:
+  IsCloudFrontAndS3PreProvisioned:
+    Type: String
+    Default: false
+    Description: Tells if cloudfront and s3 buckets are pre-provisioned or not. They
+      get pre-provisioned when the workshop is running as a part of AWS Event through
+      AWS event engine tool.
+Conditions:
+  IsNotRunningInEventEngine:
+    Fn::Not:
+    - Fn::Equals:
+      - Ref: IsCloudFrontAndS3PreProvisioned
+      - true
+Resources:
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Condition: IsNotRunningInEventEngine
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: Origin Access Identity for CloudFront Distributions
+  AdminAppBucket:
+    Type: AWS::S3::Bucket
+    Condition: IsNotRunningInEventEngine
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  AdminAppSiteReadPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsNotRunningInEventEngine
+    Properties:
+      Bucket:
+        Ref: AdminAppBucket
+      PolicyDocument:
+        Statement:
+        - Action: s3:GetObject
+          Effect: Allow
+          Resource:
+            Fn::Sub: arn:aws:s3:::${AdminAppBucket}/*
+          Principal:
+            CanonicalUser:
+              Fn::GetAtt:
+              - CloudFrontOriginAccessIdentity
+              - S3CanonicalUserId
+  AdminAppSite:
+    Type: AWS::CloudFront::Distribution
+    Condition: IsNotRunningInEventEngine
+    Properties:
+      DistributionConfig:
+        CustomErrorResponses:
+        - ErrorCode: 403
+          ResponseCode: 200
+          ResponsePagePath: /index.html
+        - ErrorCode: 404
+          ResponseCode: 200
+          ResponsePagePath: /index.html
+        DefaultCacheBehavior:
+          AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          CachedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          Compress: true
+          DefaultTTL: 3600
+          ForwardedValues:
+            Cookies:
+              Forward: none
+            QueryString: false
+          MaxTTL: 86400
+          MinTTL: 60
+          TargetOriginId: adminapp-s3origin
+          ViewerProtocolPolicy: allow-all
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        Origins:
+        - DomainName:
+            Fn::GetAtt:
+            - AdminAppBucket
+            - RegionalDomainName
+          Id: adminapp-s3origin
+          S3OriginConfig:
+            OriginAccessIdentity:
+              Fn::Join:
+              - ''
+              - - origin-access-identity/cloudfront/
+                - Ref: CloudFrontOriginAccessIdentity
+        PriceClass: PriceClass_All
+  AppBucket:
+    Type: AWS::S3::Bucket
+    Condition: IsNotRunningInEventEngine
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  AppSiteReadPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsNotRunningInEventEngine
+    Properties:
+      Bucket:
+        Ref: AppBucket
+      PolicyDocument:
+        Statement:
+        - Action: s3:GetObject
+          Effect: Allow
+          Resource:
+            Fn::Sub: arn:aws:s3:::${AppBucket}/*
+          Principal:
+            CanonicalUser:
+              Fn::GetAtt:
+              - CloudFrontOriginAccessIdentity
+              - S3CanonicalUserId
+  ApplicationSite:
+    Type: AWS::CloudFront::Distribution
+    Condition: IsNotRunningInEventEngine
+    Properties:
+      DistributionConfig:
+        CustomErrorResponses:
+        - ErrorCode: 403
+          ResponseCode: 200
+          ResponsePagePath: /index.html
+        - ErrorCode: 404
+          ResponseCode: 200
+          ResponsePagePath: /index.html
+        DefaultCacheBehavior:
+          AllowedMethods:
+          - DELETE
+          - GET
+          - HEAD
+          - OPTIONS
+          - PATCH
+          - POST
+          - PUT
+          Compress: true
+          DefaultTTL: 3600
+          ForwardedValues:
+            Cookies:
+              Forward: none
+            QueryString: false
+          MaxTTL: 86400
+          MinTTL: 60
+          TargetOriginId: tenantapp-s3origin
+          ViewerProtocolPolicy: allow-all
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        Origins:
+        - DomainName:
+            Fn::GetAtt:
+            - AppBucket
+            - RegionalDomainName
+          Id: tenantapp-s3origin
+          S3OriginConfig:
+            OriginAccessIdentity:
+              Fn::Join:
+              - ''
+              - - origin-access-identity/cloudfront/
+                - Ref: CloudFrontOriginAccessIdentity
+        PriceClass: PriceClass_All
+  LandingAppBucket:
+    Type: AWS::S3::Bucket
+    Condition: IsNotRunningInEventEngine
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  LandingAppSiteReadPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsNotRunningInEventEngine
+    Properties:
+      Bucket:
+        Ref: LandingAppBucket
+      PolicyDocument:
+        Statement:
+        - Action: s3:GetObject
+          Effect: Allow
+          Resource:
+            Fn::Sub: arn:aws:s3:::${LandingAppBucket}/*
+          Principal:
+            CanonicalUser:
+              Fn::GetAtt:
+              - CloudFrontOriginAccessIdentity
+              - S3CanonicalUserId
+  LandingApplicationSite:
+    Type: AWS::CloudFront::Distribution
+    Condition: IsNotRunningInEventEngine
+    Properties:
+      DistributionConfig:
+        CustomErrorResponses:
+        - ErrorCode: 403
+          ResponseCode: 200
+          ResponsePagePath: /index.html
+        - ErrorCode: 404
+          ResponseCode: 200
+          ResponsePagePath: /index.html
+        DefaultCacheBehavior:
+          AllowedMethods:
+          - DELETE
+          - GET
+          - HEAD
+          - OPTIONS
+          - PATCH
+          - POST
+          - PUT
+          Compress: true
+          DefaultTTL: 3600
+          ForwardedValues:
+            Cookies:
+              Forward: none
+            QueryString: false
+          MaxTTL: 86400
+          MinTTL: 60
+          TargetOriginId: landingapp-s3origin
+          ViewerProtocolPolicy: allow-all
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        Origins:
+        - DomainName:
+            Fn::GetAtt:
+            - LandingAppBucket
+            - RegionalDomainName
+          Id: landingapp-s3origin
+          S3OriginConfig:
+            OriginAccessIdentity:
+              Fn::Join:
+              - ''
+              - - origin-access-identity/cloudfront/
+                - Ref: CloudFrontOriginAccessIdentity
+        PriceClass: PriceClass_All
+Outputs:
+  AdminBucket:
+    Description: The name of the bucket for uploading the Admin Management site to
+    Value:
+      Ref: AdminAppBucket
+    Condition: IsNotRunningInEventEngine
+  AdminAppSite:
+    Description: The name of the CloudFront url for Admin Management site
+    Value:
+      Fn::GetAtt:
+      - AdminAppSite
+      - DomainName
+    Condition: IsNotRunningInEventEngine
+  AppBucket:
+    Description: The name of the bucket for uploading the Tenant Management site to
+    Value:
+      Ref: AppBucket
+    Condition: IsNotRunningInEventEngine
+  ApplicationSite:
+    Description: The name of the CloudFront url for Tenant Management site
+    Value:
+      Fn::GetAtt:
+      - ApplicationSite
+      - DomainName
+    Condition: IsNotRunningInEventEngine
+  LandingAppBucket:
+    Description: The name of the bucket for uploading the Landing site to
+    Value:
+      Ref: LandingAppBucket
+    Condition: IsNotRunningInEventEngine
+  LandingApplicationSite:
+    Description: The name of the CloudFront url for Landing site
+    Value:
+      Fn::GetAtt:
+      - LandingApplicationSite
+      - DomainName
+    Condition: IsNotRunningInEventEngine
