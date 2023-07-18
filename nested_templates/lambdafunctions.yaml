@@ -125,6 +125,24 @@ Resources:
                 Resource:
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*
 
+  SharedServicesAuthorizerFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: AuthorizerAccessRole
+    Properties:
+      CodeUri: ../Resources/
+      Handler: shared_service_authorizer.lambda_handler
+      Runtime: python3.9
+      Role: !GetAtt AuthorizerExecutionRole.Arn
+      MemorySize: 256
+      Tracing: Active
+      Layers:
+        - !Ref ServerlessSaaSLayers
+      Environment:
+        Variables:
+          OPERATION_USERS_USER_POOL: !Ref CognitoOperationUsersUserPoolId
+          OPERATION_USERS_APP_CLIENT: !Ref CognitoOperationUsersUserPoolClientId
+          OPERATION_USERS_API_KEY: !Ref ApiKeyOperationUsersParameter
+
   #Create user pool for tenant
   TenantUserPoolLambdaExecutionRole:
     Type: AWS::IAM::Role
