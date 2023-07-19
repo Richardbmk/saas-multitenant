@@ -143,6 +143,24 @@ Resources:
           OPERATION_USERS_APP_CLIENT: !Ref CognitoOperationUsersUserPoolClientId
           OPERATION_USERS_API_KEY: !Ref ApiKeyOperationUsersParameter
 
+  DumTestFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: AuthorizerAccessRole
+    Properties:
+      CodeUri: ../Resources/
+      Handler: dum_test.lambda_handler
+      Runtime: python3.9
+      Role: !GetAtt AuthorizerExecutionRole.Arn
+      MemorySize: 256
+      Tracing: Active
+      Layers:
+        - !Ref ServerlessSaaSLayers
+      Environment:
+        Variables:
+          OPERATION_USERS_USER_POOL: !Ref CognitoOperationUsersUserPoolId
+          OPERATION_USERS_APP_CLIENT: !Ref CognitoOperationUsersUserPoolClientId
+          OPERATION_USERS_API_KEY: !Ref ApiKeyOperationUsersParameter
+
   #Create user pool for tenant
   TenantUserPoolLambdaExecutionRole:
     Type: AWS::IAM::Role
