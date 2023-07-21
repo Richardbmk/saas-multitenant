@@ -431,3 +431,7 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                 Resource: !Ref TenantStackMappingTableArn
+
+Outputs:
+  SharedServicesAuthorizerFunctionArn:
+    Value: !GetAtt SharedServicesAuthorizerFunction.Arn

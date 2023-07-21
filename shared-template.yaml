@@ -45,6 +45,10 @@ Parameters:
     Type: String
     Default: 'daae9784-6d96-11eb-a28b-38f9d33cfd0f'
     Description: 'Enter default api key value to be used by api gateway for basic tier tenants'
+  StageName:
+    Type: String
+    Default: 'prod'
+    Description: 'Stage Name for the api'
 
 Conditions:
   # Delete this condition after testing
@@ -110,6 +114,36 @@ Resources:
             !GetAtt UserInterface.Outputs.ApplicationSite,
             !Ref TenantUserPoolCallbackURLParameter,
           ]
+
+  APIs:
+    Type: AWS::Serverless::Application
+    DependsOn: LambdaFunctions
+    Properties:
+      Location: nested_templates/apigateway.yaml
+      Parameters:
+        StageName: !Ref StageName
+        AuthorizerFunctionArn: !GetAtt LambdaFunctions.Outputs.SharedServicesAuthorizerFunctionArn
+
+  # APIGatewayLambdaPermissions:
+  #   Type: AWS::Serverless::Application
+  #   DependsOn: LambdaFunctions
+  #   Properties:
+  #     Location: nested_templates/apigateway_lambdapermissions.yaml
+  #     Parameters:
+  #       AuthorizerFunctionArn: !GetAtt LambdaFunctions.Outputs.SharedServicesAuthorizerFunctionArn
+  #       # AdminApiGatewayApi: !GetAtt APIs.Outputs.AdminApiGatewayApi
+
+  # #setup custom resources
+  # CustomResources:
+  #   Type: AWS::Serverless::Application
+  #   DependsOn: APIs
+  #   Properties:
+  #     Location: nested_templates/custom_resources.yaml
+  #     Parameters:
+  #       ServerlessSaaSSettingsTableArn: !GetAtt DynamoDBTables.Outputs.ServerlessSaaSSettingsTableArn
+  #       ServerlessSaaSSettingsTableName: !GetAtt DynamoDBTables.Outputs.ServerlessSaaSSettingsTableName
+  #       TenantStackMappingTableArn: !GetAtt DynamoDBTables.Outputs.TenantStackMappingTableArn
+  #       TenantStackMappingTableName: !GetAtt DynamoDBTables.Outputs.TenantStackMappingTableName
 
 Outputs:
   AdminSiteBucket:

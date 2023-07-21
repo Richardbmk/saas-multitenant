@@ -1,0 +1,4 @@
+$ sam deploy --template-file shared-template.yaml
+$ sam build --template-file shared-template.yaml
+$ sam local invoke --template-file shared-template.yaml -e events/event.json DumTestFunction --region eu-west-1
+$ sam local start-api

@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Template to setup api gateway, apis, api keys and usage plan as part of bootstrap
+Parameters:
+  StageName:
+    Type: String
+  AuthorizerFunctionArn:
+    Type: String
+
+Resources:
+  ApiGatewayCloudWatchLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub apigateway-cloudwatch-publish-role-${AWS::Region}
+      Path: '/'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+  ApiGatewayAttachCloudwatchLogArn:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchLogRole.Arn
+
+  AdminApiGatewayAccessLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/api-gateway/access-logs-serverless-saas-admin-api
+      RetentionInDays: 30
+#   AdminApiGatewayApi:
+#     Type: AWS::Serverless::Api
+#     Properties:
+#       MethodSettings:
+#         - DataTraceEnabled: False
+#           LoggingLevel: INFO
+#           MetricsEnabled: True
+#           ResourcePath: '/*'
+#           HttpMethod: '*'
+#       Auth:
+#         ResourcePolicy:
+#           CustomStatements:
+#             - Effect: Allow
+#               Principal: '*'
+#               Action: 'execute-api:Invoke'
+#               Resource: ['execute-api:/*/*/*']
+#       AccessLogSetting:
+#         DestinationArn: !GetAtt AdminApiGatewayAccessLogs.Arn
+#         Format: '{ "requestId":"$context.requestId", "ip": "$context.identity.sourceIp", "caller":"$context.identity.caller", "user":"$context.identity.user","requestTime":"$context.requestTime", "httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath", "status":"$context.status","protocol":"$context.protocol", "responseLength":"$context.responseLength" }'
+#       TracingEnabled: True
+#       DefinitionBody:
+#         openapi: 3.0.1
+#         info:
+#           title: !Join ['', ['serverless-saas-admin-api-', !Ref 'AWS::Region']]
+#         basePath: !Join ['', ['/', !Ref StageName]]
+#         x-amazon-apigateway-api-key-source: 'AUTHORIZER'
+#         schemes:
+#           - https
+#         # paths:
+
+#         components:
+#           securitySchemes:
+#             api_key:
+#               type: 'apiKey'
+#               name: 'x-api-key'
+#               in: 'header'
+#             sigv4Reference:
+#               type: 'apiKey'
+#               name: 'Authorization'
+#               in: 'header'
+#               x-amazon-apigateway-authtype: 'awsSigv4'
+#             Authorizer:
+#               type: 'apiKey'
+#               name: 'Authorization'
+#               in: 'header'
+#               x-amazon-apigateway-authtype: 'custom'
+#               x-amazon-apigateway-authorizer:
+#                 authorizerUri: !Join
+#                   - ''
+#                   - - !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+#                     - !Ref AuthorizerFunctionArn
+#                     - /invocations
+#                 authorizerResultTtlInSeconds: 60
+#                 type: 'token'
+#       StageName: prod
+
+# Outputs:
+#   AdminApiGatewayApi:
+#     Value: !Ref AdminApiGatewayApi

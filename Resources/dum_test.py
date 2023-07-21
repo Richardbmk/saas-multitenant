@@ -6,7 +6,9 @@ from my_common_function import say_hello
 
 
 def lambda_handler(event, context):
+    message = "Hello Richard"
     return {
         "statusCode": 200,
-        "body": json.dumps({"message": say_hello()}),  # invoke layer function
+        "message": message,
+        # "body": {json.dumps({"message": say_hello()})},  # invoke layer function
     }
