@@ -149,14 +149,14 @@ Resources:
         ApiKeyStandardTierParameter: !Ref ApiKeyStandardTierParameter
         ApiKeyBasicTierParameter: !Ref ApiKeyBasicTierParameter
 
-  # APIGatewayLambdaPermissions:
-  #   Type: AWS::Serverless::Application
-  #   DependsOn: LambdaFunctions
-  #   Properties:
-  #     Location: nested_templates/apigateway_lambdapermissions.yaml
-  #     Parameters:
-  #       AuthorizerFunctionArn: !GetAtt LambdaFunctions.Outputs.SharedServicesAuthorizerFunctionArn
-  #       # AdminApiGatewayApi: !GetAtt APIs.Outputs.AdminApiGatewayApi
+  APIGatewayLambdaPermissions:
+    Type: AWS::Serverless::Application
+    DependsOn: LambdaFunctions
+    Properties:
+      Location: nested_templates/apigateway_lambdapermissions.yaml
+      Parameters:
+        AuthorizerFunctionArn: !GetAtt LambdaFunctions.Outputs.SharedServicesAuthorizerFunctionArn
+        AdminApiGatewayApi: !GetAtt APIs.Outputs.AdminApiGatewayApi
 
   # #setup custom resources
   # CustomResources:
