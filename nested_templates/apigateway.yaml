@@ -187,5 +187,13 @@ Resources:
       StageName: prod
 
 Outputs:
+  # UsagePlanBasicTier:
+  #   Value: !Ref UsagePlanBasicTier
+  # UsagePlanStandardTier:
+  #   Value: !Ref UsagePlanStandardTier
+  # UsagePlanPremiumTier:
+  #   Value: !Ref UsagePlanPremiumTier
+  # UsagePlanPlatinumTier:
+  #   Value: !Ref UsagePlanPlatinumTier
   AdminApiGatewayApi:
     Value: !Ref AdminApiGatewayApi
