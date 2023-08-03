@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
 import re
 import json
 import os
@@ -20,16 +23,14 @@ api_key_operation_user = os.environ["OPERATION_USERS_API_KEY"]
 
 
 def lambda_handler(event, context):
-    print(event)
-
-    # get JWT after Bearer from authorization
+    # get JWT token after Bearer from authorization
     token = event["authorizationToken"].split(" ")
     if token[0] != "Bearer":
         raise Exception("Authorization header should have a format Bearer <JWT> Token")
     jwt_bearer_token = token[1]
     logger.info("Method ARN: " + event["methodArn"])
 
-    # Only to get tenant id to get user pool info
+    # only to get tenant id to get user pool info
     unauthorized_claims = jwt.get_unverified_claims(jwt_bearer_token)
     logger.info(unauthorized_claims)
 
@@ -48,7 +49,7 @@ def lambda_handler(event, context):
         api_key = tenant_details["Item"]["apiKey"]
 
     # get keys for tenant user pool to validate
-    keys_url = f"https://cognito-idp.{region}.amazonaws.con/{userpool_id}/.well-known/jwks.json"
+    keys_url = f"https://cognito-idp.{region}.amazonaws.com/{userpool_id}/.well-known/jwks.json"
     with urllib.request.urlopen(keys_url) as f:
         response = f.read()
     keys = json.loads(response.decode("utf-8"))["keys"]
@@ -89,6 +90,13 @@ def lambda_handler(event, context):
 
     authResponse = policy.build()
 
+    #   Generate STS credentials to be used for FGAC
+
+    #   Important Note:
+    #   We are generating STS token inside Authorizer to take advantage of the caching behavior of authorizer
+    #   Another option is to generate the STS token inside the lambda function itself, as mentioned in this blog post: https://aws.amazon.com/blogs/apn/isolating-saas-tenants-with-dynamically-generated-iam-policies/
+    #   Finally, you can also consider creating one Authorizer per microservice in cases where you want the IAM policy specific to that service
+
     iam_policy = auth_manager.getPolicyForUser(
         user_role,
         utils.Service_Identifier.SHARED_SERVICES.value,
@@ -109,8 +117,8 @@ def lambda_handler(event, context):
 
     # pass sts credentials to lambda
     context = {
-        "accessKey": credentials["AccessKeyId"],
-        "secretKey": credentials["SecretAccessKey"],
+        "accesskey": credentials["AccessKeyId"],  # $context.authorizer.key -> value
+        "secretkey": credentials["SecretAccessKey"],
         "sessiontoken": credentials["SessionToken"],
         "userName": user_name,
         "tenantId": tenant_id,
@@ -127,9 +135,8 @@ def lambda_handler(event, context):
 
 def validateJWT(token, app_client_id, keys):
     # get the kid from the headers prior to verification
-    headers = jwt.get_unverified_header(token)
+    headers = jwt.get_unverified_headers(token)
     kid = headers["kid"]
-
     # search for the kid in the downloaded public keys
     key_index = -1
     for i in range(len(keys)):
@@ -139,37 +146,29 @@ def validateJWT(token, app_client_id, keys):
     if key_index == -1:
         logger.info("Public key not found in jwks.json")
         return False
-
     # construct the public key
     public_key = jwk.construct(keys[key_index])
-
     # get the last two sections of the token,
     # message and signature (encoded in base64)
     message, encoded_signature = str(token).rsplit(".", 1)
-
     # decode the signature
     decoded_signature = base64url_decode(encoded_signature.encode("utf-8"))
-
     # verify the signature
     if not public_key.verify(message.encode("utf8"), decoded_signature):
         logger.info("Signature verification failed")
         return False
     logger.info("Signature successfully verified")
-
-    # Since we passed the verification, we can now safely
+    # since we passed the verification, we can now safely
     # use the unverified claims
     claims = jwt.get_unverified_claims(token)
-
     # additionally we can verify the token expiration
-    if time.time() > cliams["exp"]:
+    if time.time() > claims["exp"]:
         logger.info("Token is expired")
         return False
-
-    # and the Audience (use cliams["client_id"] if verifying an access token)
+    # and the Audience  (use claims['client_id'] if verifying an access token)
     if claims["aud"] != app_client_id:
         logger.info("Token was not issued for this audience")
         return False
-
     # now we can use the claims
     logger.info(claims)
     return claims
@@ -187,32 +186,29 @@ class HttpVerb:
 
 
 class AuthPolicy(object):
-
-    """The AWS account id the policy will be generated for. This is used to create the method ARN."""
-
     awsAccountId = ""
-
-    """The principal used for the policy, this should be a unique identifier for ent end user."""
+    """The AWS account id the policy will be generated for. This is used to create the method ARNs."""
     principalId = ""
-
-    """The policy version used for the evaluation. This should always be '2012-10-17'"""
+    """The principal used for the policy, this should be a unique identifier for the end user."""
     version = "2012-10-17"
-
-    """The regular expression used to validate resources paths for the policy"""
+    """The policy version used for the evaluation. This should always be '2012-10-17'"""
     pathRegex = "^[/.a-zA-Z0-9-\*]+$"
+    """The regular expression used to validate resource paths for the policy"""
 
-    """These are the internal lists of allowed and denied methods. These are lists of objects and each object has 2 properties: A resource ARN and a nullable conditions statement."""
+    """these are the internal lists of allowed and denied methods. These are lists
+    of objects and each object has 2 properties: A resource ARN and a nullable
+    conditions statement.
+    the build method processes these lists and generates the approriate
+    statements for the final policy"""
     allowMethods = []
     denyMethods = []
 
-    """The API Gateway API id. By default this is set to '*'"""
     restApiId = "*"
-
-    """The region where the API is deployed. By default this is set to '*'"""
+    """The API Gateway API id. By default this is set to '*'"""
     region = "*"
-
-    """The name of the stage used in the policy. By default this is set to '*'"""
+    """The region where the API is deployed. By default this is set to '*'"""
     stage = "*"
+    """The name of the stage used in the policy. By default this is set to '*'"""
 
     def __init__(self, principal, awsAccountId):
         self.awsAccountId = awsAccountId
@@ -221,7 +217,9 @@ class AuthPolicy(object):
         self.denyMethods = []
 
     def _addMethod(self, effect, verb, resource, conditions):
-        """Adds Method to the internal lists of allowed or denied methods. Each object in the internal list contains a resource ARN and a condition statement. The condition statement can be null."""
+        """Adds a method to the internal lists of allowed or denied methods. Each object in
+        the internal list contains a resource ARN and a condition statement. The condition
+        statement can be null."""
         if verb != "*" and not hasattr(HttpVerb, verb):
             raise NameError(
                 "Invalid HTTP verb " + verb + ". Allowed verbs in HttpVerb class"
@@ -263,7 +261,8 @@ class AuthPolicy(object):
             )
 
     def _getEmptyStatement(self, effect):
-        """Returns an empty statement object prepopulated with the correct action and the desired effect."""
+        """Returns an empty statement object prepopulated with the correct action and the
+        desired effect."""
         statement = {
             "Action": "execute-api:Invoke",
             "Effect": effect[:1].upper() + effect[1:].lower(),
@@ -273,7 +272,8 @@ class AuthPolicy(object):
         return statement
 
     def _getStatementForEffect(self, effect, methods):
-        """This function loops over an array of objects containing a resourceArn and conditions statement and generates the array of statements for the policy."""
+        """This function loops over an array of objects containing a resourceArn and
+        conditions statement and generates the array of statements for the policy."""
         statements = []
 
         if len(methods) > 0:
@@ -301,11 +301,13 @@ class AuthPolicy(object):
         self._addMethod("Deny", HttpVerb.ALL, "*", [])
 
     def allowMethod(self, verb, resource):
-        """Adds and API Gateway method (Http verb + Resource path) to the list of allowed methods for the policy"""
+        """Adds an API Gateway method (Http verb + Resource path) to the list of allowed
+        methods for the policy"""
         self._addMethod("Allow", verb, resource, [])
 
     def denyMethod(self, verb, resource):
-        """Adds and API Gateway method (Http verb + Resource path) to the list of denied methods for the policy"""
+        """Adds an API Gateway method (Http verb + Resource path) to the list of denied
+        methods for the policy"""
         self._addMethod("Deny", verb, resource, [])
 
     def allowMethodWithConditions(self, verb, resource, conditions):
@@ -315,7 +317,7 @@ class AuthPolicy(object):
         """
         self._addMethod("Allow", verb, resource, conditions)
 
-    def allowMethodWithConditions(self, verb, resource, conditions):
+    def denyMethodWithConditions(self, verb, resource, conditions):
         """Adds an API Gateway method (Http verb + Resource path) to the list of denied
         methods and includes a condition for the policy statement. More on AWS policy
         conditions here: http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html#Condition
@@ -327,8 +329,8 @@ class AuthPolicy(object):
         conditions. This will generate a policy with two main statements for the effect:
         one statement for Allow and one statement for Deny.
         Methods that includes conditions will have their own statement in the policy."""
-        if (self.allowAllMethods is None or len(self.allowAllMethods) == 0) and (
-            self.denyAllMethods is None or len(self.denyAllMethods) == 0
+        if (self.allowMethods is None or len(self.allowMethods) == 0) and (
+            self.denyMethods is None or len(self.denyMethods) == 0
         ):
             raise NameError("No statements defined for the policy")
 
@@ -338,11 +340,10 @@ class AuthPolicy(object):
         }
 
         policy["policyDocument"]["Statement"].extend(
-            self._getStatementForEffect("Allow", self.allowAllMethods)
+            self._getStatementForEffect("Allow", self.allowMethods)
         )
-
         policy["policyDocument"]["Statement"].extend(
-            self._getStatementForEffect("Deny", self.denyAllMethods)
+            self._getStatementForEffect("Deny", self.denyMethods)
         )
 
         return policy
